@@ -4,6 +4,25 @@
     const STORAGE_KEY = "winget-toolkit-selection";
     const THEME_KEY = "winget-toolkit-theme";
 
+    // --- Origem dos icones ---------------------------------------------------
+    // Publicado, os icones sao servidos do proprio repositorio na branch main
+    // via jsDelivr. Usamos o CDN e nao o raw.githubusercontent porque este
+    // ultimo e limitado por taxa e nao foi feito para trafego de producao.
+    //
+    // A pipeline de deploy substitui "@main" pelo SHA do commit publicado, de
+    // modo que cada versao do site tenha sua propria URL de icone e o cache do
+    // CDN nunca devolva uma imagem desatualizada.
+    const REMOTE_ICON_BASE =
+        "https://cdn.jsdelivr.net/gh/Caio-Martin/Automate_winget_deploy@main/src/assets/apps/";
+    const LOCAL_ICON_BASE = "src/assets/apps/";
+
+    // Abrindo o arquivo direto (file://) ou servindo em localhost, usa os PNGs
+    // do disco: da para trabalhar offline e ver a troca de um icone na hora.
+    const isLocal =
+        location.protocol === "file:" ||
+        /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    const ICON_BASE = isLocal ? LOCAL_ICON_BASE : REMOTE_ICON_BASE;
+
     const TAB_ICONS = {
         star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>',
         globe: '<circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>',
@@ -146,7 +165,7 @@
             card.innerHTML = `
                 <input type="checkbox" id="chk-${cssSafe(app.id)}" ${state.selected.has(app.id) ? "checked" : ""} />
                 <span class="card-icon" aria-hidden="true">
-                    <img src="src/assets/apps/${cssSafe(app.id)}.png" alt="" loading="lazy" />
+                    <img src="${ICON_BASE}${cssSafe(app.id)}.png" alt="" loading="lazy" />
                 </span>
                 <span class="card-body">
                     <code class="card-tag" title="${app.id}">${app.id}</code>
@@ -157,12 +176,22 @@
             `;
 
             const icon = card.querySelector(".card-icon img");
-            icon.addEventListener("error", () => {
+            // Se o CDN estiver fora do ar, ainda existe uma copia dos icones
+            // publicada junto com o site: tenta ela antes de desistir. So depois
+            // das duas falharem o card cai para as iniciais do nome.
+            let tentouLocal = ICON_BASE === LOCAL_ICON_BASE;
+            icon.addEventListener("error", function aoFalhar() {
+                if (!tentouLocal) {
+                    tentouLocal = true;
+                    icon.src = LOCAL_ICON_BASE + cssSafe(app.id) + ".png";
+                    return;
+                }
+                icon.removeEventListener("error", aoFalhar);
                 const fallback = document.createElement("span");
                 fallback.className = "card-icon-fallback";
                 fallback.textContent = initials(app.name);
                 icon.replaceWith(fallback);
-            }, { once: true });
+            });
 
             const checkbox = card.querySelector("input");
             checkbox.addEventListener("change", () => {
