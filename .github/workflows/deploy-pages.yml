@@ -1,0 +1,96 @@
+name: Deploy no GitHub Pages
+
+# Todo PR de dev -> main que for mergeado gera um push na main, e e esse push
+# que dispara a publicacao. workflow_dispatch permite republicar na mao, sem
+# precisar de um commit novo.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Se dois merges cairem juntos, o ultimo vence: evita duas publicacoes
+# disputando o mesmo ambiente.
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Validar e montar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # O site nao tem build, entao um app sem o .png correspondente so
+      # apareceria como card quebrado depois de publicado. Este passo derruba
+      # o deploy antes disso.
+      - name: Validar catalogo
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from "node:fs";
+
+          const src = fs.readFileSync("src/js/apps.js", "utf8");
+          const { APPS, CATEGORIES } = await import(
+              "data:text/javascript," + encodeURIComponent(src + "\nexport { APPS, CATEGORIES };")
+          );
+
+          const icone = (id) => "src/assets/apps/" + id.replace(/[^a-zA-Z0-9]/g, "-") + ".png";
+          const chaves = new Set(CATEGORIES.map((c) => c.key));
+          const erros = [];
+
+          const ids = APPS.map((a) => a.id);
+          ids.filter((x, i) => ids.indexOf(x) !== i).forEach((x) => erros.push(`id duplicado: ${x}`));
+
+          APPS.forEach((a) => {
+              if (!fs.existsSync(icone(a.id))) erros.push(`icone faltando: ${icone(a.id)}`);
+              if (!chaves.has(a.category) || a.category === "all") erros.push(`categoria invalida em ${a.id}: ${a.category}`);
+              if (!a.name || !a.desc) erros.push(`nome ou descricao vazios em ${a.id}`);
+          });
+
+          if (erros.length) {
+              console.error("Catalogo invalido, publicacao abortada:");
+              erros.forEach((e) => console.error("  - " + e));
+              process.exit(1);
+          }
+          console.log(`Catalogo ok: ${APPS.length} aplicativos, todos com icone.`);
+          JS
+
+      - name: Montar o site
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -r src _site/
+
+      # Os icones do site publicado vem do CDN apontando para a main. Trocar
+      # "@main" pelo SHA do commit faz cada deploy ter sua propria URL, entao o
+      # cache do jsDelivr nunca devolve a imagem de uma versao anterior.
+      - name: Fixar os icones no commit publicado
+        run: |
+          sed -i "s|@main/src/assets/apps/|@${GITHUB_SHA}/src/assets/apps/|g" _site/src/js/app.js
+          grep -q "@${GITHUB_SHA}/src/assets/apps/" _site/src/js/app.js \
+            || { echo "A URL base dos icones mudou em app.js e o sed nao casa mais. Ajuste este passo."; exit 1; }
+          echo "Icones fixados em ${GITHUB_SHA}"
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Publicar
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
