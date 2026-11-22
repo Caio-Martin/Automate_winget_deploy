@@ -47,6 +47,8 @@ execução.
 ## Estrutura do projeto
 
 ```
+.github/workflows/
+└── deploy-pages.yml           # publica no GitHub Pages a cada push na main
 index.html                     # marcação da página (ponto de entrada)
 README.md
 LICENSE
@@ -67,6 +69,33 @@ A separação entre `assets/brand/` e `assets/apps/` é proposital: `brand/` gua
 do próprio projeto (logo, favicon), enquanto `apps/` contém **somente** os ícones dos
 softwares do catálogo — todos juntos num único diretório, com o nome derivado do ID do
 winget.
+
+## Publicação
+
+O site é publicado no **GitHub Pages** por
+[`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml). O gatilho é
+qualquer push na `main` — ou seja, **todo PR de `dev` → `main` que for mergeado republica o
+site**. Também dá para republicar na mão pelo botão *Run workflow* na aba Actions.
+
+Antes de publicar, a pipeline valida o catálogo: se algum app em `apps.js` estiver sem o PNG
+correspondente, com categoria inválida ou sem nome/descrição, o deploy falha em vez de
+subir um card quebrado.
+
+> Na primeira execução é preciso que **Settings → Pages → Source** esteja como
+> **GitHub Actions**. O workflow tenta ativar isso sozinho (`enablement: true`), mas se a
+> conta não permitir, basta trocar manualmente uma vez.
+
+### De onde vêm os ícones
+
+Abrindo o `index.html` localmente (`file://` ou `localhost`), os ícones vêm da pasta
+`src/assets/apps/` do disco — assim dá para trabalhar offline e ver a troca de um ícone na
+hora.
+
+Já no site publicado eles vêm do próprio repositório na branch `main`, servidos pelo
+jsDelivr. A pipeline substitui `@main` pelo SHA do commit publicado, então cada versão do
+site tem a sua própria URL de ícone e o cache do CDN nunca devolve uma imagem de uma versão
+anterior. Os PNGs continuam indo junto no deploy: se o CDN estiver fora do ar, a página cai
+para a cópia local antes de recorrer às iniciais do nome.
 
 ## Adicionando novos aplicativos
 
