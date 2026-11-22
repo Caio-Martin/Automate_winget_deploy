@@ -1,0 +1,12 @@
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Artefatos da bateria de testes (gerados a partir do index.html, nunca versionados)
+d1.html
+d2.html
+d3_*.html
+_ui_tests.js
+_resp_tests.js
+_mobile.html
+_catalogo_preview.html
