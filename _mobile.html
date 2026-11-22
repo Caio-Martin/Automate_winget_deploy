@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>mobile harness</title>
+<style>body{margin:0;background:#333}iframe{border:0;display:block}</style></head>
+<body>
+<script>
+// Testa o index.html real dentro de iframes com larguras mobile exatas.
+const WIDTHS = [320, 360, 390, 414, 480];
+const R = { pass: 0, fail: 0, failures: [], perWidth: {} };
+const check = (n, c, d) => { if (c) R.pass++; else { R.fail++; R.failures.push(n + (d !== undefined ? " -> " + d : "")); } };
+
+let pending = WIDTHS.length;
+
+WIDTHS.forEach(w => {
+    const f = document.createElement("iframe");
+    f.width = w; f.height = 760; f.src = "/index.html";
+    f.onload = () => {
+        try {
+            const d = f.contentDocument, win = f.contentWindow;
+            const $ = s => d.querySelector(s);
+            const vw = win.innerWidth;
+            const m = { viewport: vw, scrollW: d.documentElement.scrollWidth };
+
+            check(w + "px: viewport realmente estreito", vw <= w + 1, "innerWidth=" + vw);
+            check(w + "px: sem scroll horizontal",
+                d.documentElement.scrollWidth <= vw + 1,
+                d.documentElement.scrollWidth + " > " + vw);
+
+            const over = Array.from(d.querySelectorAll("body *")).filter(el => {
+                if (el.closest(".tabs") && !el.classList.contains("tabs")) return false;
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.right > vw + 1;
+            }).map(el => el.tagName + "." + ((el.className.baseVal ?? el.className) + "").split(" ")[0]);
+            check(w + "px: nada estoura a viewport", over.length === 0, [...new Set(over)].slice(0, 4).join(", "));
+
+            const cards = Array.from(d.querySelectorAll("#appGrid .card"));
+            const cw = cards.length ? Math.round(Math.min(...cards.map(c => c.getBoundingClientRect().width))) : 0;
+            m.cardWidth = cw;
+            check(w + "px: card cabe na tela", cw <= vw, cw + "px num viewport de " + vw);
+            check(w + "px: card nao fica espremido (>=180px)", cw >= 180, cw + "px");
+
+            // texto nao pode vazar do card
+            const leak = cards.filter(c => {
+                const cr = c.getBoundingClientRect();
+                return Array.from(c.querySelectorAll(".card-name, .card-desc, .card-tag"))
+                    .some(t => t.getBoundingClientRect().right > cr.right + 1);
+            }).length;
+            check(w + "px: texto nao vaza do card", leak === 0, leak + " cards");
+
+            // barra inferior: botoes nao podem se sobrepor
+            const btns = Array.from(d.querySelectorAll(".action-bar .btn")).map(b => b.getBoundingClientRect());
+            const overlap = btns.some((a, i) => btns.slice(i + 1).some(b => a.right > b.left + 1 && a.left < b.right - 1));
+            check(w + "px: botoes da barra nao se sobrepoem", !overlap);
+            check(w + "px: barra inferior cabe na largura",
+                btns.every(b => b.right <= vw + 1), "algum botao passa de " + vw);
+
+            // cabecalho
+            const brand = $(".brand").getBoundingClientRect();
+            check(w + "px: marca cabe no cabecalho", brand.right <= vw + 1, Math.round(brand.right));
+
+            m.cols = cards.length ? new Set(cards.map(c => Math.round(c.getBoundingClientRect().top))).size : 0;
+            R.perWidth[w] = m;
+        } catch (e) {
+            R.fail++; R.failures.push(w + "px EXCECAO: " + e.message);
+        }
+        if (--pending === 0) {
+            const pre = document.createElement("pre");
+            pre.id = "mobileResults";
+            pre.textContent = JSON.stringify(R);
+            document.body.appendChild(pre);
+        }
+    };
+    document.body.appendChild(f);
+});
+</script>
+</body>
+</html>
