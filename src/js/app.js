@@ -120,7 +120,7 @@
             const btn = document.createElement("button");
             btn.className = "tab" + (!searching && cat.key === state.category ? " active" : "");
             btn.type = "button";
-            btn.innerHTML = `${tabIconSvg(cat.icon)}<span>${cat.label}</span>`;
+            btn.innerHTML = `${tabIconSvg(cat.icon)}<span>${escapeHtml(cat.label)}</span>`;
             btn.addEventListener("click", () => {
                 state.category = cat.key;
                 state.query = "";
@@ -168,9 +168,9 @@
                     <img src="${ICON_BASE}${cssSafe(app.id)}.png" alt="" loading="lazy" />
                 </span>
                 <span class="card-body">
-                    <code class="card-tag" title="${app.id}">${app.id}</code>
-                    <span class="card-name">${app.name}</span>
-                    <span class="card-desc" title="${app.desc}">${app.desc}</span>
+                    <code class="card-tag" title="${escapeHtml(app.id)}">${escapeHtml(app.id)}</code>
+                    <span class="card-name">${escapeHtml(app.name)}</span>
+                    <span class="card-desc" title="${escapeHtml(app.desc)}">${escapeHtml(app.desc)}</span>
                 </span>
                 <span class="card-check" aria-hidden="true">✓</span>
             `;
@@ -213,6 +213,18 @@
         return str.replace(/[^a-zA-Z0-9]/g, "-");
     }
 
+    // Os cards sao montados com innerHTML, entao qualquer texto vindo do
+    // catalogo precisa ser neutralizado antes de virar marcacao. Sem isso, um
+    // nome como <img src=x onerror=...> executaria script na pagina publicada.
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
     function updateCount() {
         const n = state.selected.size;
         el.count.textContent = n === 1 ? "1 selecionado" : `${n} selecionados`;
@@ -246,7 +258,7 @@
         lines.push("    $apps = @(");
         chosen.forEach((app) => {
             const source = app.source || "winget";
-            lines.push(`        [PSCustomObject]@{ Nome = "${escapePs(app.name)}"; Id = "${app.id}"; Source = "${source}" }`);
+            lines.push(`        [PSCustomObject]@{ Nome = "${escapePs(app.name)}"; Id = "${escapePs(app.id)}"; Source = "${escapePs(source)}" }`);
         });
         lines.push("    )");
         lines.push("");
@@ -268,14 +280,37 @@
         lines.push("    & $payload");
         lines.push("} else {");
         lines.push('    Write-Host "Este script precisa ser executado como Administrador. Solicitando elevacao..." -ForegroundColor Yellow');
-        lines.push('    Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile", "-Command", $payload.ToString()');
+        lines.push("");
+        lines.push("    # O payload vai codificado em base64 porque -ArgumentList nao coloca aspas");
+        lines.push("    # nos argumentos: passado como texto, o script seria quebrado nos espacos e");
+        lines.push("    # rejuntado em uma linha so, perdendo as quebras de linha e fazendo o '>>'");
+        lines.push("    # das mensagens virar operador de redirecionamento. A janela elevada abria");
+        lines.push("    # e fechava sem executar nada. Em base64 nao ha espaco nem aspa para quebrar.");
+        lines.push("    $bytes = [System.Text.Encoding]::Unicode.GetBytes($payload.ToString())");
+        lines.push("    $encoded = [Convert]::ToBase64String($bytes)");
+        lines.push("");
+        lines.push("    try {");
+        lines.push('        Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile", "-EncodedCommand", $encoded -ErrorAction Stop');
+        lines.push("    } catch {");
+        lines.push('        Write-Host "" ');
+        lines.push('        Write-Host "A elevacao foi recusada ou falhou - nada foi instalado." -ForegroundColor Red');
+        lines.push('        Write-Host "Aceite o aviso do Windows (UAC) ao rodar novamente." -ForegroundColor Red');
+        lines.push("    }");
         lines.push("}");
 
         return lines.join("\n");
     }
 
+    // Dentro de uma string "..." o PowerShell interpreta tres coisas: a propria
+    // aspa (encerra a string), o acento grave (escape) e o cifrao (expande
+    // variavel e, em $(...), EXECUTA codigo). Escapar so a aspa deixaria passar
+    // $(...) — e o script gerado roda elevado. A ordem importa: o acento grave
+    // vem primeiro, senao escaparia os escapes inseridos logo abaixo.
     function escapePs(str) {
-        return str.replace(/"/g, '""');
+        return String(str)
+            .replace(/`/g, "``")
+            .replace(/"/g, '""')
+            .replace(/\$/g, "`$");
     }
 
     function openPanel() {

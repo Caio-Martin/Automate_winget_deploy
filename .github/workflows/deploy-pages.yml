@@ -43,6 +43,12 @@ jobs:
           const chaves = new Set(CATEGORIES.map((c) => c.key));
           const erros = [];
 
+          // Um Package Identifier do winget so tem letras, numeros, . + _ e -.
+          // Qualquer outra coisa (aspas, cifrao, acento grave, sinal de maior)
+          // seria dado hostil tentando sair da string PowerShell ou do HTML.
+          const ID_VALIDO = /^[A-Za-z0-9][A-Za-z0-9.+_-]*$/;
+          const PERIGOSO = /[<>"'`$\\\r\n]/;
+
           const ids = APPS.map((a) => a.id);
           ids.filter((x, i) => ids.indexOf(x) !== i).forEach((x) => erros.push(`id duplicado: ${x}`));
 
@@ -50,6 +56,10 @@ jobs:
               if (!fs.existsSync(icone(a.id))) erros.push(`icone faltando: ${icone(a.id)}`);
               if (!chaves.has(a.category) || a.category === "all") erros.push(`categoria invalida em ${a.id}: ${a.category}`);
               if (!a.name || !a.desc) erros.push(`nome ou descricao vazios em ${a.id}`);
+              if (!ID_VALIDO.test(a.id)) erros.push(`id fora do formato do winget: ${JSON.stringify(a.id)}`);
+              if (PERIGOSO.test(a.name)) erros.push(`caractere perigoso no nome de ${a.id}: ${JSON.stringify(a.name)}`);
+              if (PERIGOSO.test(a.desc)) erros.push(`caractere perigoso na descricao de ${a.id}: ${JSON.stringify(a.desc)}`);
+              if (a.source && !/^(winget|msstore)$/.test(a.source)) erros.push(`source invalido em ${a.id}: ${JSON.stringify(a.source)}`);
           });
 
           if (erros.length) {
