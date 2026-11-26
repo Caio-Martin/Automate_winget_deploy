@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WinGet Toolkit — Instalador de Softwares</title>
+
+    <!-- O GitHub Pages nao permite cabecalhos proprios, entao a politica vai
+         pela meta tag. A pagina nao tem dependencias: o unico recurso externo
+         sao os icones no jsDelivr. frame-ancestors nao funciona via meta - se
+         o site passar por um proxy (Cloudflare), vale repetir isso em
+         cabecalho de resposta e acrescentar X-Frame-Options. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.jsdelivr.net data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+    <meta name="description" content="Selecione softwares e gere um script PowerShell pronto para instalar tudo de uma vez via winget. Roda inteiro no navegador, sem servidor." />
+    <meta name="theme-color" content="#0b0e14" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="WinGet Toolkit — Instalador de Softwares" />
+    <meta property="og:description" content="Marque os programas que quer e receba um script pronto para colar no PowerShell. Instala tudo de uma vez via winget." />
+    <meta property="og:image" content="https://caio-martin.github.io/Automate_winget_deploy/src/assets/brand/logo.svg" />
+    <meta property="og:url" content="https://caio-martin.github.io/Automate_winget_deploy/" />
+    <meta name="twitter:card" content="summary" />
+
     <link rel="icon" type="image/svg+xml" href="src/assets/brand/logo.svg" />
     <link rel="stylesheet" href="src/css/style.css" />
 </head>
